@@ -4,6 +4,8 @@
 
 ### This module is not for massive frameworks, only for small scripts/code snippets. It is very simple and straightforward to use.
 
+#### pip install cinpy
+
 ## Before we discuss the code, please install:
 
 MSVC ..... C++ x64/x86 build tools from: 
