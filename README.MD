@@ -27,7 +27,7 @@ and add the folder \MinGW\bin to %PATH%
 
 ### A system made for dummies
 
-The idea is to add always the same function in the C code that we want to use in Python. 
+The idea is to add always the same function to the C code that we want to use in Python. 
 
 The following code snippet is our base in C, we have to change it only a little to make it work (almost) everywhere. If that sounds already complicated, don’t worry, 90% of the following code never changes:
 
