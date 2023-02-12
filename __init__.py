@@ -412,13 +412,13 @@ def create_signature_variations(
             "{prefix_for_functions}",
             None,
             [
-                ndpointer({k.ct}, flags="C_CONTIGUOUS"),
+                ndpointer({k.ct}, flags="aligned,C_CONTIGUOUS"),
                 ctypes.c_size_t,
-                ndpointer({k.ct}, flags="C_CONTIGUOUS"),
+                ndpointer({k.ct}, flags="aligned,C_CONTIGUOUS,writeable"),
                 {add_to_argtypes}
             ],
         ),
-        """
+        """.replace("!CT_DATA_DTYPE!",k.ct)
         whole_python_argtypes += argt
     whole_c_code = f"{c_file_header}\n{whole_c_code}\n{c_file_footer}"
     whole_python_argtypes = f"all_functions = [{whole_python_argtypes}]"
