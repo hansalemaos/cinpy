@@ -12,7 +12,10 @@ resus[:10]
 Out[6]: array([ 8, 34, 22, 40,  2,  4, 72, 11, 19, 50])
 
 Time in seconds:
+cinpy.bb_para_trans_test(py_s1, py_s2, len(nunu), p)
 C++  0.003536399999999773
+
+pycode=[x.index(b'n') if b'n' in x else -1 for x in text ]
 Python  2.8341445000000007
 """
 
