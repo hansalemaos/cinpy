@@ -1,18 +1,17 @@
+import collections
 import configparser
-import ctypes
-import importlib
+import os
 import re
 import subprocess
-import sys
-from flexible_partial import FlexiblePartialOwnName
+from time import sleep
+
+from cprinter import TC
 import numpy as np
-import os
-import collections
+import ctypes
+
 from touchtouch import touch
 
-c_functions = sys.modules[__name__]
-
-
+nested_dict = lambda: collections.defaultdict(nested_dict)
 d_types2 = collections.namedtuple("d_types", "np c ct use comment code alias")
 d_typesall = []
 d_typesall.append(
@@ -204,22 +203,275 @@ d_typesall.append(
 )
 
 
+def create_function_variations(
+
+    cfunctioname,
+    cfunctionname_with_prefix,
+    functionvariation1,
+    functionvariation2,
+    cfunction,
+    argtypes,
+    replacedict_argtypes,
+    replacedict_c_code,
+    ignored_dtypes1,
+    ignored_dtypes2,
+    ignored_dtypes3,
+samedtypes,
+    printoutput=False,
+):
+
+    allresults = nested_dict()
+    for dty3 in d_typesall:
+        if (
+            dty3.np in ignored_dtypes3
+            or dty3.c in ignored_dtypes3
+            or dty3.ct in ignored_dtypes3
+        ):
+            continue
+        for dty2 in d_typesall:
+            if (
+                dty2.np in ignored_dtypes2
+                or dty2.c in ignored_dtypes2
+                or dty2.ct in ignored_dtypes2
+            ):
+                continue
+            for dty in d_typesall:
+                if (
+                    dty.np in ignored_dtypes1
+                    or dty.c in ignored_dtypes1
+                    or dty.ct in ignored_dtypes1
+                ):
+                    continue
+                if samedtypes:
+                    chdi={
+                    "!C_DATA_DTYPE!": dty.c,
+                    "!C_DATA_DTYPE2!": dty2.c,
+                    "!C_DATA_DTYPE3!": dty3.c,}
+                    checkdu=[]
+                    for s in samedtypes:
+                        checkdu.append(chdi[s])
+                    if len(set(checkdu)) > 1:
+                        continue
+
+                ctdatatype = dty.ct.split(".")[-1]
+                ctdatatype2 = dty2.ct.split(".")[-1]
+                ctdatatype3 = dty3.ct.split(".")[-1]
+
+                comment0 = (
+                    f"// np={dty.np}, c={dty.c}, ctypes={dty.ct}, code={dty.code}".replace(
+                        "\n", " "
+                    ).replace(
+                        "\r", " "
+                    )
+                    + f" ||| np={dty2.np}, c={dty2.c}, ctypes={dty2.ct}, code={dty2.code}".replace(
+                        "\n", " "
+                    ).replace(
+                        "\r", " "
+                    )
+                    + f" ||| np={dty3.np}, c={dty3.c}, ctypes={dty3.ct}, code={dty3.code}".replace(
+                        "\n", " "
+                    ).replace(
+                        "\r", " "
+                    )
+                )
+                comment1 = (
+                    f"// {dty.alias}".replace("\n", " ").replace("\r", " ")
+                    + f" ||| {dty2.alias}".replace("\n", " ").replace("\r", " ")
+                    + f" ||| {dty3.alias}".replace("\n", " ").replace("\r", " ")
+                )
+                comment2 = (
+                    f"// {dty.comment}".replace("\n", " ").replace("\r", " ")
+                    + f" ||| {dty2.comment}".replace("\n", " ").replace("\r", " ")
+                    + f" ||| {dty3.comment}".replace("\n", " ").replace("\r", " ")
+                )
+                allcomments = f"{comment0}\n{comment1}\n{comment2}"
+                allcommentsargs = f"{comment0[3:]}\n{comment1[3:]}\n{comment2[3:]}"
+                allstdreplacementsdict = {
+                    "!C_FUNCTION_NAME!": cfunctioname,
+                    "!DTYPE_EXPLANATION!": allcommentsargs,
+                    "!DTYPE_EXPLANATIONC!": allcomments,
+                    "!C_DATA_DTYPE!": dty.c,
+                    "!CT_DATA_DTYPE!": ctdatatype,
+                    "!C_DATA_DTYPE2!": dty2.c,
+                    "!CT_DATA_DTYPE2!": ctdatatype2,
+                    "!C_DATA_DTYPE3!": dty3.c,
+                    "!CT_DATA_DTYPE3!": ctdatatype3,
+                    "!NP_DATA_DTYPE!": dty.np,
+                    "!ALIAS_DATA_DTYPE!": dty.alias,
+                }
+                cfunctionname_with_prefixvar = cfunctionname_with_prefix
+                cfunctionvar = cfunction
+
+                argtypesvar = argtypes
+                for key, item in allstdreplacementsdict.items():
+                    argtypesvar = argtypesvar.replace(key, item)
+                for key, item in replacedict_argtypes.items():
+                    argtypesvar = argtypesvar.replace(key, item)
+                for key, item in allstdreplacementsdict.items():
+                    argtypesvar = argtypesvar.replace(key, item)
+
+                functionvariation1var, functionvariation2var = (
+                    functionvariation1,
+                    functionvariation2,
+                )
+                for key, item in allstdreplacementsdict.items():
+                    functionvariation1var = functionvariation1var.replace(key, item)
+                    functionvariation2var = functionvariation2var.replace(key, item)
+                    cfunctionname_with_prefixvar = cfunctionname_with_prefixvar.replace(
+                        key, item
+                    )
+                    cfunctionvar = cfunctionvar.replace(key, item)
+
+                for key, item in allstdreplacementsdict.items():
+                    functionvariation1var = functionvariation1var.replace(key, item)
+                    functionvariation2var = functionvariation2var.replace(key, item)
+                    cfunctionname_with_prefixvar = cfunctionname_with_prefixvar.replace(
+                        key, item
+                    )
+                    cfunctionvar = cfunctionvar.replace(key, item)
+
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["np"] = dty.np
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["c"] = dty.c
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["ct"] = dty.ct
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["use"] = True
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["comment"] = dty.comment
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["code"] = dty.code
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["alias"] = dty.alias
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["argtypes"] = argtypesvar
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["cfunction"] = cfunctionvar
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["functionvariation1"] = functionvariation1var
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["functionvariation2"] = functionvariation2var
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["cfunctionname_with_prefix"] = cfunctionname_with_prefixvar
+
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["np2"] = dty2.np
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["c2"] = dty2.c
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["ct2"] = dty2.ct
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["comment2"] = dty2.comment
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["code2"] = dty2.code
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["alias2"] = dty2.alias
+
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["np3"] = dty3.np
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["c3"] = dty3.c
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["ct3"] = dty3.ct
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["comment3"] = dty3.comment
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["code3"] = dty3.code
+                allresults[
+                    f"{dty.np}XXX{dty2.np}XXX{dty3.np}{dty.ct}XXX{dty2.ct}XXX{dty3.ct}{dty.c}XXX{dty2.c}XXX{dty3.c}"
+                ]["alias3"] = dty3.alias
+
+                if printoutput:
+                    print(argtypesvar)
+                    print(cfunctionvar)
+                    print("----------------------------------")
+    return allresults
+
+
+def write_argtypes_import(cpydict, pythonheader, pythonfooter, path, printout=True):
+
+    allargtypes = "["
+
+    for key, item in cpydict.items():
+        allargtypes += f"""{item['argtypes']},\n\n"""
+    allargtypes += "]"
+    wholepyfile = f"{pythonheader}\n\nallargtypes={allargtypes}\n\n{pythonfooter}"
+    if printout:
+        print(wholepyfile)
+    if path:
+        touch(path)
+        with open(path, mode="w", encoding="utf-8") as f:
+            f.write(wholepyfile)
+    return wholepyfile
+
+
+def write_ccode(cpydict, cheader, cfooter, path, printout=True):
+    allargtypes = ""
+    for key, item in cpydict.items():
+        allargtypes += f"""{item['cfunction']}\n\n"""
+
+    wholecfile = f"{cheader}\n\n{allargtypes}\n\n{cfooter}"
+    if printout:
+        print(wholecfile)
+    if path:
+        touch(path)
+        with open(path, mode="w", encoding="utf-8") as f:
+            f.write(wholecfile)
+    return wholecfile
+
+
+def get_file(f):
+    return os.path.normpath(os.path.join(os.path.abspath(os.path.dirname(__file__)), f))
+
+
+def get_file_own_folder(f, folder):
+    return os.path.normpath(os.path.join(folder, f))
+
+
 def compile_cpp(
-    cfgfile,
+    modulename,
     fnames,
     vcvarsall_bat,
     cl_exe,
     link_exe,
     cppsource,
-    output,
     compilerflags=(
         "/std:c++17",
         "/Ferelease",
         "/EHsc",
         "/MT",
         "/O2",
+        "/bigobj",
     ),
 ):
+
+    cfgfile = get_file(f"{modulename}.ini")
+    output = get_file(f"{modulename}.dll")
+
     config = configparser.ConfigParser()
     allcommand = [
         vcvarsall_bat,
@@ -254,259 +506,277 @@ def compile_cpp(
     with open(cfgfile, "w") as f:
         config.write(f)
 
+def try_delete_file(path):
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+            return True
+        except Exception:
+            return False
+    return True
 
-def get_cpp_functions(
-    modulename,
-    all_functions,
-    code=None,
-    vcvarsall_bat=None,
-    cl_exe=None,
-    link_exe=None,
-    recompile=False,
-    compilerflags=(
-        "/std:c++17",
-        "/Ferelease",
-        "/EHsc",
-        "/MT",
-        "/O2",
-    ),
-):
-    sourcepath = get_file(f"{modulename}.cpp")
-    dllpath = get_file(f"{modulename}.dll")
-    cfgfile = get_file(f"{modulename}.ini")
-    fnames = [x[0] for x in all_functions]
-    if code is None or vcvarsall_bat is None or cl_exe is None or link_exe is None:
-        load_cpp_functions(dllpath, cfgfile, all_functions)
-    elif recompile or not os.path.exists(dllpath) or not os.path.exists(cfgfile):
-        try:
-            if os.path.exists(sourcepath):
-                os.remove(sourcepath)
-        except Exception:
-            pass
-        try:
-            if os.path.exists(dllpath):
-                os.remove(dllpath)
-        except Exception:
-            pass
-        try:
-            if os.path.exists(cfgfile):
-                os.remove(cfgfile)
-        except Exception:
-            pass
-        with open(sourcepath, mode="w", encoding="utf-8") as f:
-            f.write(code)
-        compile_cpp(
-            cfgfile,
-            fnames,
+class CreateCppDll:
+    def __init__(
+        self,
+        cfunctioname,
+        cfunction, samedtypes,
+        modulename,
+        variable_for_function_creation=(
+            r"!CT_DATA_DTYPE!_!CT_DATA_DTYPE2!_!C_FUNCTION_NAME!_!CT_DATA_DTYPE3!"
+        ),
+
+        cheader="""
+    #include <iostream>
+    #include <stdio.h>
+    #include <algorithm>  
+    #include <vector>     
+    #include <functional> 
+    #include <conio.h>
+    #include <ppl.h>
+
+    """,
+        cfooter="",
+        ignored_dtypes1=(
+            "bool",
+            # "signed char",
+            # "unsigned char",
+            # "short",
+            # "unsigned short",
+            # "int",
+            # "unsigned int",
+            # "long",
+            # "unsigned long",
+            # "long long",
+            # "unsigned long long",
+            "float",
+            # "double",
+            "long double",
+            "float complex",
+            "double complex",
+            "long double complex",
+        ),
+        ignored_dtypes2=(
+            "bool",
+            # "signed char",
+            # "unsigned char",
+            # "short",
+            # "unsigned short",
+            # "int",
+            # "unsigned int",
+            # "long",
+            # "unsigned long",
+            # "long long",
+            # "unsigned long long",
+            "float",
+            # "double",
+            "long double",
+            "float complex",
+            "double complex",
+            "long double complex",
+        ),
+        ignored_dtypes3=(
+            "bool",
+            # "signed char",
+            # "unsigned char",
+            # "short",
+            # "unsigned short",
+            # "int",
+            # "unsigned int",
+            # "long",
+            # "unsigned long",
+            # "long long",
+            # "unsigned long long",
+            "float",
+            # "double",
+            "long double",
+            "float complex",
+            "double complex",
+            "long double complex",
+        ),
+        vcvarsall_bat=r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat",
+        cl_exe=r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.34.31933\bin\Hostx86\x64\cl.exe",
+        link_exe=r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.34.31933\bin\Hostx86\x64\link.exe",
+        compilerflags=("/std:c++17", "/Ferelease", "/EHsc", "/MT", "/O2", "/bigobj"),
+    ):
+        (
+            self.cfunctioname,
+            self.cfunction,
+            self.modulename,
+            self.variable_for_function_creation,
+            self.cheader,
+            self.cfooter,
+            self.ignored_dtypes1,
+            self.ignored_dtypes2,
+            self.ignored_dtypes3,
+            self.vcvarsall_bat,
+            self.cl_exe,
+            self.link_exe,
+            self.compilerflags, self.samedtypes
+        ) = (
+            cfunctioname,
+            cfunction,
+            modulename,
+            variable_for_function_creation,
+            cheader,
+            cfooter,
+            ignored_dtypes1,
+            ignored_dtypes2,
+            ignored_dtypes3,
             vcvarsall_bat,
             cl_exe,
             link_exe,
-            sourcepath,
-            dllpath,
-            compilerflags,
+            compilerflags,samedtypes
         )
-        load_cpp_functions(dllpath, cfgfile, all_functions)
-    else:
-        load_cpp_functions(dllpath, cfgfile, all_functions)
+        self.functionvariation1 = f"""aa_{variable_for_function_creation}"""
 
+        self.functionvariation2 = f"""bb_{variable_for_function_creation}"""
+        self.argtypes = f"""
+        ("{variable_for_function_creation}",
+        '''!DTYPE_EXPLANATION!''',
+        "bb_",
+        "aa_",
+        None,
+        [ctypes.POINTER( ctypes.!CT_DATA_DTYPE!),
+        ctypes.c_size_t,
+        ctypes.POINTER( ctypes.!CT_DATA_DTYPE2!),
+        ctypes.POINTER( ctypes.!CT_DATA_DTYPE3!),])
+        """
+        self.cfunctionname_with_prefix = f"""{variable_for_function_creation}"""
 
-def load_cpp_functions(dllpath, cfgfile, all_functions):
-    lib = ctypes.CDLL(dllpath)
-    confignew = configparser.ConfigParser()
-    confignew.read(cfgfile)
-    funcs = confignew.defaults()
-    allfu = []
-    for (
-        fname,
-        descri,
-        function_prefix,
-        functionnormalprefix,
-        restype,
-        argtypes,
-    ) in all_functions:
-        fun = lib.__getattr__(funcs[fname])
-        fun.restype = restype
-        if len(argtypes) != 0:
-            fun.argtypes = argtypes
-        allfu.append((fname, fun))
-        setattr(c_functions, f"{functionnormalprefix}{fname}", fun)
-        setattr(
-            c_functions,
-            f"{function_prefix}{fname}",
-            FlexiblePartialOwnName(execute_function, descri, True, fun),
+        self.cpydict = create_function_variations(
+            cfunctioname,
+            self.cfunctionname_with_prefix,
+            self.functionvariation1,
+            self.functionvariation2,
+            cfunction,
+            self.argtypes,
+            replacedict_argtypes={},
+            replacedict_c_code={},
+            ignored_dtypes1=ignored_dtypes1,
+            ignored_dtypes2=ignored_dtypes2,
+            ignored_dtypes3=ignored_dtypes3, samedtypes=self.samedtypes
         )
+        self.allfunctionvariations = [
+            x[1]["cfunctionname_with_prefix"] for x in self.cpydict.items()
+        ]
+        self.cfgfile = get_file(f"{modulename}.ini")
+        self.outputdll = get_file(f"{modulename}.dll")
+        self.pythonheader = "import sys\nimport ctypes\nfrom numpy.ctypeslib import ndpointer\nimport configparser\nfrom flexible_partial import FlexiblePartialOwnName\nimport numpy as np\n\n"
+        self.pythonfooter = rf"""
 
-    return allfu
 
 
-def print_datatypes():
-    nw = "\n"
-    for k in d_typesall:
+
+dllpath = r"{self.outputdll}"
+cfgfile = r"{self.cfgfile}"
+lib = ctypes.CDLL(dllpath)
+confignew = configparser.ConfigParser()
+confignew.read(cfgfile)
+funcs = confignew.defaults()
+c_functions = sys.modules[__name__]
+
+def execute_function(f,*args, **kwargs):
+    f(*args, **kwargs)
+
+
+allfu = []
+for (fname, descri, function_prefix, functionnormalprefix, restype, argtypes,) in allargtypes:
+    fun = lib.__getattr__(funcs[fname])
+    fun.restype = restype
+    if len(argtypes) != 0:
+        fun.argtypes = argtypes
+    allfu.append((fname, fun))
+    setattr(c_functions, f"{{functionnormalprefix}}{{fname}}", fun)
+    setattr(c_functions, f"{{function_prefix}}{{fname}}", FlexiblePartialOwnName(execute_function, descri, True, fun), )
+
+
+        """
+
+        self.wholefunction = (
+            f"""def {self.cfunctioname}(inputarray1np,inputarray2np,outputdtype):\n\n"""
+        )
+        co = 0
+        ifword = "if"
+        for key, item in self.cpydict.items():
+            checkdty = f"""
+            {ifword} (inputarray1np.dtype == {item['np']}
+            and inputarray2np.dtype == {item['np2']}
+            and outputdtype == {item['np3']}):
+                inputarray1_dtype_np = {item['np']}
+                inputarray2_dtype_np = {item['np2']}
+                outputarray_dtype_np = {item['np3']}
+                inputarray1_dtype_ct = {item['ct']}
+                inputarray2_dtype_ct = {item['ct2']}
+                outputarray_dtype_ct = {item['ct3']}
+                execfunc = c_functions.{item['functionvariation2']}
+            """
+            co += 1
+            if co > 0:
+                ifword = "elif"
+            self.wholefunction += f"\n{checkdty}\n\n"
+
+        self.subsdict = self.cpydict[
+            sorted([(x.count("double"), x) for x in self.cpydict])[-1][1]
+        ]
+
+        self.wholefunction += f"""
+            else: 
+                inputarray1_dtype_np = {self.subsdict['np']}
+                inputarray2_dtype_np = {self.subsdict['np2']}
+                outputarray_dtype_np = {self.subsdict['np3']}
+                inputarray1_dtype_ct = {self.subsdict['ct']}
+                inputarray2_dtype_ct = {self.subsdict['ct2']}
+                outputarray_dtype_ct = {self.subsdict['ct3']}
+                execfunc = c_functions.{self.subsdict['functionvariation2']}
+            outputarraynp = np.zeros(inputarray1np.shape,dtype=outputarray_dtype_np)
+            inputarray1np = np.require(inputarray1np, inputarray1_dtype_np, ['ALIGNED',"C_CONTIGUOUS"])
+            inputarray1ct = inputarray1np.ctypes.data_as(ctypes.POINTER(inputarray1_dtype_ct))
+            inputarray2np = np.require(inputarray2np, inputarray2_dtype_np, ['ALIGNED',"C_CONTIGUOUS"])
+            inputarray2ct = inputarray2np.ctypes.data_as(ctypes.POINTER(inputarray2_dtype_ct))
+            outputarraynp = np.require(outputarraynp, outputarray_dtype_np, ['ALIGNED', 'WRITEABLE',"C_CONTIGUOUS"])
+            outputarrayct = outputarraynp.ctypes.data_as(ctypes.POINTER(outputarray_dtype_ct))
+            execfunc(inputarray1ct,inputarray1np.size,inputarray2ct,outputarrayct)
+            return outputarrayct._arr
+        """
+        self.pythonfooter = self.pythonfooter + "\n\n" + self.wholefunction
+        self.pypath = get_file(f"{self.modulename}module.py")
+
+        self.pyfile = write_argtypes_import(
+            self.cpydict, self.pythonheader, self.pythonfooter, self.pypath
+        )
+        ####################
+
+        ###################################################
+
+        self.cpath = get_file(f"{self.modulename}_cppcode.cpp")
+
+        self.cfile = write_ccode(
+            self.cpydict, self.cheader, self.cfooter, self.cpath, printout=True
+        )
+        print(TC(f"Python import file: {self.pypath}").bg_black.fg_lightgreen)
+        print(TC(f"C++ file: {self.cpath}").bg_black.fg_lightgreen)
+
+    def compile_cpp_code(self):
+        try_delete_file(self.outputdll)
+        try_delete_file(self.cfgfile)
+        try_delete_file(self.outputdll[:-3]+'exp')
+        try_delete_file(self.outputdll[:-3] + 'lib')
+        try_delete_file(self.cpath[-3] + 'obj')
+        compile_cpp(
+            modulename=self.modulename,
+            fnames=self.allfunctionvariations,
+            vcvarsall_bat=self.vcvarsall_bat,
+            cl_exe=self.cl_exe,
+            link_exe=self.link_exe,
+            cppsource=self.cpath,
+            compilerflags=self.compilerflags,
+        )
         print(
-            f"""
-Numpy:        {k.np}
-C:            {k.c}
-ctypes:       {k.ct}
-code:         {k.code}
-alias:        {k.alias}
-comment:      {f"{nw}              ".join([sax for sax in k.comment.splitlines() if sax.strip()!=''])}
-"""
+            TC(
+                f"""Config file for functions: {self.cfgfile}\nC++ dll file: {self.outputdll}"""
+            ).bg_black.fg_lightcyan
         )
+        sleep(3)
+        try_delete_file(self.cpath[-3] + 'obj')
 
 
-def create_signature_variations(
-    basefunction: str,
-    code_c_function: str,
-    savepath_argtypes: str,
-    savepath_cfunctions: str,
-    c_file_header: str = "",
-    c_file_footer: str = "",
-    add_to_function_signature="",
-    prefix_for_functions="",
-    add_to_argtypes="",
-    prefix_for_partial_functions="aa_",
-    add_to_top_of_py_file="",
-    ignored_dtypes=(
-        "bool",
-        "np.csingle",
-        "np.cdouble",
-        "np.clongdouble",
-        "np.longdouble",
-    ),
-):
-    touch(savepath_argtypes)
-    touch(savepath_cfunctions)
-
-    whole_c_code = ""
-
-    whole_python_argtypes = ""
-
-    add_to_python_file = "from numpy.ctypeslib import ndpointer\nimport ctypes\n"
-    add_to_top_of_py_file += add_to_python_file
-
-    for k in d_typesall:
-        if k.np in ignored_dtypes or k.c in ignored_dtypes or k.ct in ignored_dtypes:
-            continue
-        if not k.use:
-            continue
-        comment0 = f"// np={k.np}, c={k.c}, ctypes={k.ct}, code={k.code}".replace(
-            "\n", " "
-        ).replace("\r", " ")
-        comment1 = f"// {k.alias}".replace("\n", " ").replace("\r", " ")
-        comment2 = f"// {k.comment}".replace("\n", " ").replace("\r", " ")
-        newa = (
-            code_c_function.replace("!C_DATA_DTYPE!", f" {k.c} ")
-            .replace("!ADDEXTRA!", add_to_function_signature)
-            .strip()
-        )
-        newfuna = f'{basefunction}_{k.ct.split(".")[-1].replace("c_", "").strip()}'
-        newa = newa.replace("!BASE_FUNCTION_NAME!", newfuna)
-        allcomments = f"{comment0}\n{comment1}\n{comment2}"
-        allcommentsargs = f"{comment0[3:]}\n{comment1[3:]}\n{comment2[3:]}"
-        whole_c_code += f"\n\n\n\n{allcomments}\n{newa}"
-        argt = f"""
-            (
-            "{newfuna}",
-            r'''{allcommentsargs}''',
-            "{prefix_for_partial_functions}",
-            "{prefix_for_functions}",
-            None,
-            [
-                ndpointer({k.ct}, flags="aligned,C_CONTIGUOUS"),
-                ctypes.c_size_t,
-                ndpointer({k.ct}, flags="aligned,C_CONTIGUOUS,writeable"),
-                {add_to_argtypes}
-            ],
-        ),
-        """.replace("!CT_DATA_DTYPE!",k.ct)
-        whole_python_argtypes += argt
-    whole_c_code = f"{c_file_header}\n{whole_c_code}\n{c_file_footer}"
-    whole_python_argtypes = f"all_functions = [{whole_python_argtypes}]"
-    whole_python_argtypes = f"{add_to_top_of_py_file}\n{whole_python_argtypes}"
-    with open(savepath_argtypes, mode="w", encoding="utf-8") as f:
-        f.write(whole_python_argtypes)
-    with open(savepath_cfunctions, mode="w", encoding="utf-8") as f:
-        f.write(whole_c_code)
-    return whole_python_argtypes, whole_c_code
-
-
-def get_file(f):
-    return os.path.normpath(os.path.join(os.path.abspath(os.path.dirname(__file__)), f))
-
-
-def get_file_own_folder(f, folder):
-    return os.path.normpath(os.path.join(folder, f))
-
-
-def compile_c_code(gcc_exe, c_code, modulename, folder=None,compilerflags=("-O3",)):
-    if folder is None:
-        cfusource = get_file(f"{modulename}.c")
-        sofile = get_file(f"{modulename}.so")
-    else:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        cfusource = get_file_own_folder(f=f"{modulename}.c", folder=folder)
-        sofile = get_file_own_folder(f=f"{modulename}.so", folder=folder)
-    with open(cfusource, mode="w", encoding="utf-8") as f:
-        f.write(c_code)
-    command = [gcc_exe, "-fPIC", "-shared", *compilerflags, "-o", sofile, cfusource]
-    subprocess.run(command, shell=False)
-    return sofile
-
-
-def loadlib(so_file, all_functions):
-    lib = ctypes.cdll.LoadLibrary(so_file)
-
-    for (
-        fname,
-        descri,
-        function_prefix,
-        functionnormalprefix,
-        restype,
-        argtypes,
-    ) in all_functions:
-        fun = lib.__getattr__(fname)
-        fun.restype = restype
-        if len(argtypes) > 0:
-            fun.argtypes = argtypes
-        setattr(c_functions, f"{functionnormalprefix}{fname}", fun)
-        setattr(
-            c_functions,
-            f"{function_prefix}{fname}",
-            FlexiblePartialOwnName(execute_function, descri, True, fun),
-        )
-
-
-def load_module_extern_py_file(modulename):
-    moduleinport = f"{modulename}_argtypes"
-    try:
-        baxax = importlib.import_module(f'cinpy.{moduleinport}')
-    except Exception:
-        try:
-            baxax = importlib.import_module(f'.{moduleinport}')
-        except Exception:
-            baxax = importlib.import_module(f'{moduleinport}')
-
-    all_functions = getattr(baxax, "all_functions")
-    sofile = get_file(f"{modulename}.so")
-    loadlib(sofile, all_functions)
-
-
-def get_all_files_for_module(modulename):
-    moduleinport = f"{modulename}_argtypes"
-    folder = os.path.normpath((os.path.abspath(os.path.dirname(__file__))))
-    argtypesfile = os.path.normpath(os.path.join(folder, f"{moduleinport}.py"))
-    cfile = os.path.normpath(os.path.join(folder, f"{modulename}_cfunctions.c"))
-    sofile = os.path.normpath(os.path.join(folder, f"{modulename}.so"))
-    return moduleinport, folder, argtypesfile, cfile, sofile
-
-
-def execute_function(
-    f,
-    arr,
-    *args,
-    **kwargs,
-):
-    arr2 = np.empty_like(arr)
-    f(arr, arr.size, arr2, *args, **kwargs)
-    return arr2
