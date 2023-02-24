@@ -634,4 +634,131 @@ array([221388.897288, 123871.689162,  40683.176456, ..., 222221.415598,
         73761.122266,  69851.803892])
 
 
+
+# There is also a second version (if you need to pass more variables)
+
+from cinpy import CreateCppDllv2
+
+cppco = CreateCppDllv2(
+    modulename="cppsort",
+    # "module" will be added to "cppsort"
+    # This is how to import it after compiling the code:
+    # from cinpy.cppsortmodule import cppradixsort
+    cheader="""
+#include <vector>       // std::vector
+#include <ppl.h>
+
+""",  # Code before the functions in the .cpp file -> imports etc.
+    cfooter="",  # Code after the functions in the .cpp file
+    cfunctioname="cppradixsort",
+    # This is the name of the C++ function in Python, this is how you import it:
+    # from cinpy.cppsortmodule import cppradixsort
+    var_variations={
+        # cinpy creates various versions of the functions (I could not make
+        # templates/function overloading work with Python) Create a dict with
+        # all datadtypes that you want to use for each variable
+        "!C_DATA_DTYPE1!": (  # "bool",
+            "signed char",
+            "unsigned char",
+            "short",
+            "unsigned short",
+            "int",
+            "unsigned int",
+            "long",
+            "unsigned long",
+            "long long",
+            "unsigned long long",  # "float",
+            # "double",
+            # "long double",
+            # "float complex",
+            # "double complex",
+            # "long double complex",
+        ),
+        "!C_DATA_DTYPE2!": ("size_t",),
+        "!C_DATA_DTYPE3!": (  # "bool",
+            "signed char",
+            "unsigned char",
+            "short",
+            "unsigned short",
+            "int",
+            "unsigned int",
+            "long",
+            "unsigned long",
+            "long long",
+            "unsigned long long",  # "float",
+            # "double",
+            # "long double",
+            # "float complex",
+            # "double complex",
+            # "long double complex",
+        ),
+        "!C_DATA_DTYPE4!": ("size_t",),
+        "!C_DATA_DTYPE5!": (  # "bool",
+            "signed char",
+            "unsigned char",
+            "short",
+            "unsigned short",
+            "int",
+            "unsigned int",
+            "long",
+            "unsigned long",
+            "long long",
+            "unsigned long long",  # "float",
+            # "double",
+            # "long double",
+            # "float complex",
+            # "double complex",
+            # "long double complex",
+        ),
+        "!C_DATA_DTYPE6!": ("size_t",),
+    },
+    dtypemustbeequal=[("!C_DATA_DTYPE1!", "!C_DATA_DTYPE3!", "!C_DATA_DTYPE5!")],
+    # "!C_DATA_DTYPE1!", "!C_DATA_DTYPE3!", "!C_DATA_DTYPE5!" will always have the same Datatype
+    fu=rf"""
+__declspec(dllexport) void variable_for_function_creation
+(!C_DATA_DTYPE1! * indatav1,!C_DATA_DTYPE2!  size1,
+!C_DATA_DTYPE3! * indatav2,!C_DATA_DTYPE4!  size2,
+!C_DATA_DTYPE5! * indatav3,!C_DATA_DTYPE6! size3  )
+{{
+   std::vector<!C_DATA_DTYPE1!> v(indatav1,
+   indatav1 + size1);
+   concurrency::parallel_radixsort(begin(v), end(v));
+   std::copy(v.begin(), v.begin()+size1, indatav3);
+
+   std::vector<!C_DATA_DTYPE1!> v2(indatav1, indatav1 + size1);
+   concurrency::parallel_buffered_sort(begin(v2), end(v2));
+   std::copy(v2.begin(), v2.begin()+size1, indatav2);
+
+
+}}""",
+    # The C++ code, use the keys in the dict for the data types, don't change the function name:  variable_for_function_creation
+)
+cppco.compile_cpp_code(
+    vcvarsall_bat=r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat",
+    cl_exe=r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.34.31933\bin\Hostx86\x64\cl.exe",
+    link_exe=r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.34.31933\bin\Hostx86\x64\link.exe",
+    compilerflags=("/std:c++20", "/Ferelease", "/EHsc", "/MT", "/O2", "/bigobj"),
+) # Compile the code
+
+#import the compiled code
+
+from cinpy.cppsortmodule import cppradixsort
+import numpy as np
+inputarray = np.array([6,3,2,64,2,46],dtype=np.uint8)
+npbufferedsort = np.zeros_like(inputarray)
+npradixsort = np.zeros_like(inputarray)
+len1=inputarray.size
+len2=npbufferedsort.size
+len3=npradixsort.size
+# arguments always start with v + number, data dtype should be detected automatically
+cppradixsort(v0=inputarray,v1=len1,v2=npbufferedsort,v3=len2,v4=npradixsort,v5=len3,)
+print(inputarray)
+print(npbufferedsort)
+print(npradixsort)
+
+# results
+# [ 6  3  2 64  2 46]
+# [ 2  2  3  6 46 64]
+# [ 2  2  3  6 46 64]
+
 ```
